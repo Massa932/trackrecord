@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track Record</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a1a1a;padding:24px;font-size:14px}
+  h1{font-size:20px;font-weight:600;margin-bottom:20px;color:#1a1a1a}
+  .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+  .stat{background:#f7f6f3;border-radius:8px;padding:12px 14px}
+  .stat-label{font-size:11px;color:#9b9a97;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:600;color:#1a1a1a}
+  .stat-value.green{color:#0f7b55}
+  .stat-value.red{color:#c0392b}
+  .chart-wrap{background:#fff;border:1px solid #e9e9e7;border-radius:8px;padding:14px;margin-bottom:20px}
+  .chart-title{font-size:11px;color:#9b9a97;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  canvas{width:100%!important;height:150px!important}
+  .form-wrap{border:1px solid #e9e9e7;border-radius:8px;padding:14px;margin-bottom:20px}
+  .form-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end}
+  .field label{font-size:11px;color:#9b9a97;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+  .field input{width:100%;font-size:13px;padding:6px 10px;height:34px;border-radius:6px;border:1px solid #e9e9e7;background:#f7f6f3;color:#1a1a1a;outline:none}
+  .field input:focus{border-color:#9b9a97}
+  .add-btn{height:34px;padding:0 14px;font-size:13px;border-radius:6px;border:1px solid #e9e9e7;background:#1a1a1a;color:#fff;cursor:pointer;white-space:nowrap;font-weight:500}
+  .add-btn:hover{background:#333}
+  .section-title{font-size:11px;color:#9b9a97;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  th{text-align:left;font-size:11px;font-weight:500;color:#9b9a97;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid #e9e9e7}
+  td{padding:8px;border-bottom:1px solid #f0efed;font-size:13px;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .del-btn{background:none;border:none;cursor:pointer;color:#9b9a97;font-size:16px;padding:0 4px;line-height:1}
+  .del-btn:hover{color:#c0392b}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500}
+  .win{background:#e8f5e9;color:#1b5e20}
+  .loss{background:#fce4e4;color:#7f1d1d}
+  .empty{text-align:center;padding:24px;color:#9b9a97;font-size:13px}
+  th:nth-child(1){width:6%}
+  th:nth-child(2){width:22%}
+  th:nth-child(3){width:20%}
+  th:nth-child(4){width:20%}
+  th:nth-child(5){width:20%}
+  th:nth-child(6){width:12%}
+</style>
+</head>
+<body>
+<h1>Track Record</h1>
+
+<div class="stats-grid">
+  <div class="stat"><div class="stat-label">P&L total</div><div class="stat-value" id="s-pnl">—</div></div>
+  <div class="stat"><div class="stat-label">Win rate</div><div class="stat-value" id="s-wr">—</div></div>
+  <div class="stat"><div class="stat-label">Max drawdown</div><div class="stat-value" id="s-dd">—</div></div>
+  <div class="stat"><div class="stat-label">Trades</div><div class="stat-value" id="s-count">0</div></div>
+  <div class="stat"><div class="stat-label">Profit factor</div><div class="stat-value" id="s-pf">—</div></div>
+  <div class="stat"><div class="stat-label">Gain moyen</div><div class="stat-value" id="s-avg">—</div></div>
+</div>
+
+<div class="chart-wrap">
+  <div class="chart-title">Courbe d'équité</div>
+  <canvas id="equity-chart"></canvas>
+</div>
+
+<div class="form-wrap">
+  <div class="section-title">Ajouter un trade</div>
+  <div class="form-row">
+    <div class="field"><label>Date</label><input type="date" id="f-date"></div>
+    <div class="field"><label>Symbole</label><input type="text" id="f-sym" placeholder="ex: BTCUSD"></div>
+    <div class="field"><label>P&L ($)</label><input type="number" id="f-pnl" placeholder="ex: 150 ou -80" step="any"></div>
+    <button class="add-btn" onclick="addTrade()">+ Ajouter</button>
+  </div>
+</div>
+
+<div>
+  <div class="section-title">Historique</div>
+  <table>
+    <thead><tr><th>#</th><th>Date</th><th>Symbole</th><th>P&L</th><th>Résultat</th><th></th></tr></thead>
+    <tbody id="trades-body"><tr><td colspan="6" class="empty">Aucun trade enregistré.</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+let trades = JSON.parse(localStorage.getItem('trades') || '[]');
+let chart = null;
+
+function save(){ localStorage.setItem('trades', JSON.stringify(trades)); }
+
+function addTrade(){
+  const date = document.getElementById('f-date').value;
+  const sym = document.getElementById('f-sym').value.trim().toUpperCase();
+  const pnl = parseFloat(document.getElementById('f-pnl').value);
+  if(!date || !sym || isNaN(pnl)) return;
+  trades.push({date, sym, pnl, id: Date.now()});
+  trades.sort((a,b) => a.date.localeCompare(b.date));
+  document.getElementById('f-date').value='';
+  document.getElementById('f-sym').value='';
+  document.getElementById('f-pnl').value='';
+  save(); render();
+}
+
+function removeTrade(id){
+  trades = trades.filter(t => t.id !== id);
+  save(); render();
+}
+
+function fmt(n){
+  const abs = Math.abs(n);
+  const s = abs >= 1000 ? abs.toLocaleString('fr-FR',{minimumFractionDigits:0,maximumFractionDigits:0}) : abs.toFixed(2);
+  return (n >= 0 ? '+' : '-') + s + ' $';
+}
+
+function render(){
+  const n = trades.length;
+  document.getElementById('s-count').textContent = n;
+  if(n === 0){
+    ['s-pnl','s-wr','s-dd','s-pf','s-avg'].forEach(id=>{
+      const el = document.getElementById(id);
+      el.textContent='—'; el.className='stat-value';
+    });
+    document.getElementById('trades-body').innerHTML='<tr><td colspan="6" class="empty">Aucun trade enregistré.</td></tr>';
+    if(chart){chart.destroy();chart=null;} return;
+  }
+
+  const totalPnl = trades.reduce((s,t)=>s+t.pnl,0);
+  const wins = trades.filter(t=>t.pnl>0);
+  const losses = trades.filter(t=>t.pnl<0);
+  const winRate = wins.length/n*100;
+  const grossGain = wins.reduce((s,t)=>s+t.pnl,0);
+  const grossLoss = Math.abs(losses.reduce((s,t)=>s+t.pnl,0));
+  const pf = grossLoss === 0 ? Infinity : grossGain/grossLoss;
+  const avgPnl = totalPnl/n;
+
+  let equity=[0], peak=0, maxDD=0;
+  trades.forEach(t=>{
+    const eq = equity[equity.length-1]+t.pnl;
+    equity.push(eq);
+    if(eq>peak) peak=eq;
+    const dd = peak-eq;
+    if(dd>maxDD) maxDD=dd;
+  });
+
+  const set = (id, txt, cls) => { const e=document.getElementById(id); e.textContent=txt; e.className='stat-value '+(cls||''); };
+  set('s-pnl', fmt(totalPnl), totalPnl>=0?'green':'red');
+  set('s-wr', winRate.toFixed(1)+'%', winRate>=50?'green':'red');
+  set('s-dd', maxDD>0?'-'+maxDD.toFixed(2)+' $':'0 $', maxDD>0?'red':'green');
+  set('s-pf', pf===Infinity?'∞':pf.toFixed(2), pf>=1?'green':'red');
+  set('s-avg', fmt(avgPnl), avgPnl>=0?'green':'red');
+
+  document.getElementById('trades-body').innerHTML = trades.map((t,i)=>`
+    <tr>
+      <td style="color:#9b9a97">${i+1}</td>
+      <td>${t.date}</td>
+      <td style="font-weight:500">${t.sym}</td>
+      <td style="font-weight:600;color:${t.pnl>=0?'#0f7b55':'#c0392b'}">${fmt(t.pnl)}</td>
+      <td><span class="badge ${t.pnl>=0?'win':'loss'}">${t.pnl>=0?'Win':'Loss'}</span></td>
+      <td><button class="del-btn" onclick="removeTrade(${t.id})" title="Supprimer">✕</button></td>
+    </tr>
+  `).join('');
+
+  const color = equity[equity.length-1]>=0?'#0f7b55':'#c0392b';
+  const labels = ['Début', ...trades.map((_,i)=>`T${i+1}`)];
+  const ctx = document.getElementById('equity-chart').getContext('2d');
+  if(chart) chart.destroy();
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{data:equity,borderColor:color,borderWidth:2,fill:true,backgroundColor:color+'18',pointRadius:equity.length>20?0:3,pointBackgroundColor:color,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)}}},scales:{x:{grid:{color:'#f0efed'},ticks:{font:{size:11},color:'#9b9a97'}},y:{grid:{color:'#f0efed'},ticks:{font:{size:11},color:'#9b9a97',callback:v=>(v>=0?'+':'')+v+' $'}}}}
+  });
+}
+
+render();
+</script>
+</body>
+</html>
